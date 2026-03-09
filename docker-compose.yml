@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  chromadb:
+    image: chromadb/chroma:0.4.24
+    container_name: chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=false
+      - IS_PERSISTENT=TRUE
+    networks:
+      - ai_network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: codebase_ai_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - repos_data:/app/repos
+    env_file:
+      - .env
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    depends_on:
+      - chromadb
+    networks:
+      - ai_network
+    command: uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: codebase_ai_ui
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - API_BASE=http://app:8000
+    depends_on:
+      - app
+    networks:
+      - ai_network
+    command: streamlit run ui.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+
+volumes:
+  chroma_data:
+  repos_data:
+
+networks:
+  ai_network:
+    driver: bridge
